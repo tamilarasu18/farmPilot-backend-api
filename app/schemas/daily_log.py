@@ -24,6 +24,28 @@ class ExpenseResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Income Schemas ---
+
+class IncomeCreate(BaseModel):
+    category: str = Field(..., min_length=1, max_length=50)
+    description: str | None = Field(None, max_length=500)
+    amount: float = Field(..., gt=0)
+    currency: str = Field("INR", max_length=10)
+
+
+class IncomeResponse(BaseModel):
+    id: str
+    daily_log_id: str
+    section_id: str
+    category: str
+    description: str | None = None
+    amount: float
+    currency: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # --- Daily Log Schemas ---
 
 class DailyLogCreate(BaseModel):
@@ -41,8 +63,9 @@ class DailyLogCreate(BaseModel):
     crop_stage: str | None = Field(None, max_length=50)
     crop_health_notes: str | None = None
 
-    # Inline expenses
+    # Inline expenses and incomes
     expenses: list[ExpenseCreate] | None = None
+    incomes: list[IncomeCreate] | None = None
 
 
 class DailyLogResponse(BaseModel):
@@ -59,7 +82,9 @@ class DailyLogResponse(BaseModel):
     crop_stage: str | None = None
     crop_health_notes: str | None = None
     expenses: list[ExpenseResponse] = []
+    incomes: list[IncomeResponse] = []
     total_expense: float = 0.0
+    total_income: float = 0.0
     created_at: datetime
 
     model_config = {"from_attributes": True}

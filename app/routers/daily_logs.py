@@ -8,12 +8,13 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.daily_log import DailyLog, Expense
+from app.models.daily_log import DailyLog, Expense, Income
 from app.models.land import LandSection
 from app.models.user import User
 from app.schemas.daily_log import (
     DailyLogCreate, DailyLogResponse, DailyLogUpdate,
     ExpenseCreate, ExpenseResponse,
+    IncomeCreate, IncomeResponse
 )
 
 router = APIRouter(prefix="/api", tags=["Daily Logs"])
@@ -34,6 +35,19 @@ def _build_log_response(log: DailyLog) -> DailyLogResponse:
         )
         for e in log.expenses
     ]
+    incomes = [
+        IncomeResponse(
+            id=i.id,
+            daily_log_id=i.daily_log_id,
+            section_id=i.section_id,
+            category=i.category,
+            description=i.description,
+            amount=i.amount,
+            currency=i.currency,
+            created_at=i.created_at,
+        )
+        for i in log.incomes
+    ]
     return DailyLogResponse(
         id=log.id,
         section_id=log.section_id,
@@ -48,7 +62,9 @@ def _build_log_response(log: DailyLog) -> DailyLogResponse:
         crop_stage=log.crop_stage,
         crop_health_notes=log.crop_health_notes,
         expenses=expenses,
+        incomes=incomes,
         total_expense=sum(e.amount for e in log.expenses),
+        total_income=sum(i.amount for i in log.incomes),
         created_at=log.created_at,
     )
 
@@ -101,10 +117,24 @@ async def create_daily_log(
             db.add(expense)
         await db.flush()
 
-    # Reload with expenses
+    # Add inline incomes if provided
+    if getattr(data, "incomes", None):
+        for income_data in data.incomes:
+            income = Income(
+                daily_log_id=log.id,
+                section_id=section_id,
+                category=income_data.category,
+                description=income_data.description,
+                amount=income_data.amount,
+                currency=income_data.currency,
+            )
+            db.add(income)
+        await db.flush()
+
+    # Reload with expenses and incomes
     result = await db.execute(
         select(DailyLog)
-        .options(selectinload(DailyLog.expenses))
+        .options(selectinload(DailyLog.expenses), selectinload(DailyLog.incomes))
         .where(DailyLog.id == log.id)
     )
     log = result.scalar_one()
@@ -132,7 +162,7 @@ async def list_daily_logs(
 
     query = (
         select(DailyLog)
-        .options(selectinload(DailyLog.expenses))
+        .options(selectinload(DailyLog.expenses), selectinload(DailyLog.incomes))
         .where(DailyLog.section_id == section_id)
         .order_by(DailyLog.log_date.desc())
     )
@@ -157,7 +187,7 @@ async def list_all_daily_logs(
     """List all daily logs for the current user."""
     query = (
         select(DailyLog)
-        .options(selectinload(DailyLog.expenses))
+        .options(selectinload(DailyLog.expenses), selectinload(DailyLog.incomes))
         .where(DailyLog.user_id == current_user.id)
         .order_by(DailyLog.log_date.desc())
     )
@@ -181,7 +211,7 @@ async def get_daily_log(
     """Get a specific daily log entry."""
     result = await db.execute(
         select(DailyLog)
-        .options(selectinload(DailyLog.expenses))
+        .options(selectinload(DailyLog.expenses), selectinload(DailyLog.incomes))
         .where(DailyLog.id == log_id, DailyLog.user_id == current_user.id)
     )
     log = result.scalar_one_or_none()
@@ -200,7 +230,7 @@ async def update_daily_log(
     """Update a daily log entry."""
     result = await db.execute(
         select(DailyLog)
-        .options(selectinload(DailyLog.expenses))
+        .options(selectinload(DailyLog.expenses), selectinload(DailyLog.incomes))
         .where(DailyLog.id == log_id, DailyLog.user_id == current_user.id)
     )
     log = result.scalar_one_or_none()
@@ -218,7 +248,7 @@ async def update_daily_log(
     # Reload with expenses
     result = await db.execute(
         select(DailyLog)
-        .options(selectinload(DailyLog.expenses))
+        .options(selectinload(DailyLog.expenses), selectinload(DailyLog.incomes))
         .where(DailyLog.id == log.id)
     )
     log = result.scalar_one()
@@ -268,3 +298,32 @@ async def add_expense(
     await db.flush()
     await db.refresh(expense)
     return expense
+
+
+@router.post("/logs/{log_id}/incomes", response_model=IncomeResponse, status_code=status.HTTP_201_CREATED)
+async def add_income(
+    log_id: str,
+    data: IncomeCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Add an income to an existing daily log."""
+    result = await db.execute(
+        select(DailyLog).where(DailyLog.id == log_id, DailyLog.user_id == current_user.id)
+    )
+    log = result.scalar_one_or_none()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+
+    income = Income(
+        daily_log_id=log_id,
+        section_id=log.section_id,
+        category=data.category,
+        description=data.description,
+        amount=data.amount,
+        currency=data.currency,
+    )
+    db.add(income)
+    await db.flush()
+    await db.refresh(income)
+    return income

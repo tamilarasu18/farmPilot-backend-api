@@ -9,9 +9,9 @@ from app.database import init_db, async_session, Base
 from app.models.crop import Crop, DEFAULT_CROPS
 from app.models.user import User  # noqa: F401 - imported for table creation
 from app.models.land import Land, LandSection  # noqa: F401
-from app.models.daily_log import DailyLog, Expense  # noqa: F401
+from app.models.daily_log import DailyLog, Expense, Income  # noqa: F401
 from app.models.soil_test import SoilTest  # noqa: F401
-from app.routers import auth, users, lands, crops, daily_logs, soil_tests
+from app.routers import auth, users, lands, crops, daily_logs, soil_tests, analytics
 
 settings = get_settings()
 
@@ -57,6 +57,7 @@ app.include_router(lands.router)
 app.include_router(crops.router)
 app.include_router(daily_logs.router)
 app.include_router(soil_tests.router)
+app.include_router(analytics.router)
 
 
 @app.get("/api/health")

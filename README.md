@@ -45,7 +45,7 @@ Farm Pilot API is the backend service powering the Farm Pilot application. Built
    ```env
    SECRET_KEY=your_secret_key_here
    ALGORITHM=HS256
-   ACCESS_TOKEN_EXPIRE_MINUTES=1440
+   ACCESS_TOKEN_EXPIRE_MINUTES=10080
    DATABASE_URL=sqlite+aiosqlite:///./farmpilot.db
    ```
 
